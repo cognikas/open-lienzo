@@ -1,0 +1,11 @@
+{
+  "_nota": "Copiar a sync/accounts.json (no se versiona) o apuntar LIENZO_ACCOUNTS a otro archivo. Una carpeta por cuenta de claude.ai; rutas relativas a este archivo. Cada sesión sincroniza solo la carpeta de la cuenta con la que inició sesión.",
+  "emails": {
+    "nombre@empresa.com": "empresa",
+    "nombre@gmail.com": "personal"
+  },
+  "roots": {
+    "empresa": "../../artifacts/empresa",
+    "personal": "../../artifacts/personal"
+  }
+}

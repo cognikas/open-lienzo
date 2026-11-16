@@ -1,0 +1,21 @@
+{
+  "_nota": "Copiar a <repo de artifacts>/entities.rules.json y adaptar. Regex sobre el título en minúsculas y sin tildes; usar \\b para palabras completas. La primera regla que calza gana.",
+  "folders": [
+    ["clientes/acme/", "acme"],
+    ["empresa/", "empresa"]
+  ],
+  "title_rules": [
+    ["\\bacme\\b", "acme"],
+    ["\\bempresa\\b|\\binterno\\b", "empresa"]
+  ],
+  "keywords": {
+    "acme": "acme",
+    "empresa": "empresa\\b"
+  },
+  "app_folders": ["/apps/([^/]+)/", "/repos/([^/]+)/"],
+  "app_names": {"tienda-web": "Tienda"},
+  "app_titles": [
+    ["\\btienda\\b", "Tienda"]
+  ],
+  "entity_app": {"acme": "Acme", "empresa": "Empresa"}
+}

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Presentación local</title>
+<style>
+/* Visor de solo lectura para artifacts tipo Slides: lee project/deck.json y muestra cada
+   project/slides/<id>.html en su lienzo fijo de 1920×1080, escalado a la ventana. */
+:root{--bg:#111312;--bar:#1b1e1c;--fg:#e8ebe9;--mut:#98a19c;--line:#2c312e;--acc:#8fb0ff}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,sans-serif}
+header{display:flex;align-items:center;gap:12px;height:48px;padding:0 16px;background:var(--bar);border-bottom:1px solid var(--line)}
+header a{color:var(--acc);text-decoration:none}
+header h1{font-size:15px;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+button{background:transparent;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--acc)}
+#n{color:var(--mut);font-variant-numeric:tabular-nums;min-width:56px;text-align:center}
+main{position:relative;height:calc(100% - 48px)}
+#wrap{position:absolute;inset:0;overflow:hidden}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;box-shadow:0 8px 40px #0008}
+#notes{position:absolute;left:16px;right:16px;bottom:16px;max-height:30%;overflow:auto;background:var(--bar);border:1px solid var(--line);border-radius:8px;padding:12px 16px;white-space:pre-wrap}
+/* Subconjunto del formato de slides (artifact-type/reference/format.md) */
+#stage section{position:relative;width:1920px;height:1080px;overflow:hidden;display:flex;flex-direction:column}
+#stage section[style*="display:flex"],#stage section[style*="display: flex"]{flex-direction:row}
+#stage section[style*="display:grid"],#stage section[style*="display: grid"]{display:grid}
+#stage h1,#stage h2,#stage h3,#stage p,#stage ul,#stage ol{margin:0}
+#stage h1{font-size:96px;font-weight:600;line-height:1.1}
+#stage h2{font-size:64px;font-weight:600;line-height:1.15}
+#stage h3{font-size:44px;font-weight:600;line-height:1.2}
+#stage p{font-size:32px;line-height:1.4}
+#stage div{display:flex;flex-direction:column}
+#stage div[style*="display:flex"],#stage div[style*="display: flex"]{flex-direction:row}  /* flex explícito = fila; sin display = columna */
+#stage aside{display:none}
+#stage x-shape{display:block;background:currentColor}
+#stage x-shape[kind=ellipse]{border-radius:50%}
+#stage x-shape[kind=rounded]{border-radius:24px}
+#stage x-shape[kind=diamond]{clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+#stage x-shape[kind=arrow-right]{clip-path:polygon(0 30%,60% 30%,60% 0,100% 50%,60% 100%,60% 70%,0 70%)}
+#stage x-shape[kind=arrow-left]{clip-path:polygon(100% 30%,40% 30%,40% 0,0 50%,40% 100%,40% 70%,100% 70%)}
+#stage x-shape[kind=arrow-up]{clip-path:polygon(30% 100%,30% 40%,0 40%,50% 0,100% 40%,70% 40%,70% 100%)}
+#stage x-shape[kind=arrow-down]{clip-path:polygon(30% 0,30% 60%,0 60%,50% 100%,100% 60%,70% 60%,70% 0)}
+#stage x-shape[kind=line]{height:0!important;background:none;border-top:4px solid currentColor}
+#stage x-icon{display:inline-grid;place-items:center;flex:none}
+#stage x-icon svg{width:100%;height:100%}
+#stage x-embed{display:block}
+#stage x-embed iframe{width:100%;height:100%;border:0}
+</style>
+</head>
+<body>
+<header>
+  <a href="/" onclick="if(document.referrer&&new URL(document.referrer).origin===location.origin&&new URL(document.referrer).pathname==='/'){history.back();return false}">← Todos</a>
+  <h1 id="title">Cargando…</h1>
+  <button id="prev" aria-label="Slide anterior">←</button>
+  <span id="n">–</span>
+  <button id="next" aria-label="Slide siguiente">→</button>
+  <button id="nt" aria-pressed="false">Notas</button>
+</header>
+<main>
+  <div id="wrap"><div id="stage"></div></div>
+  <div id="pins" class="lc-layer"></div>
+  <div id="notes" hidden></div>
+</main>
+<script src="/_viewer/comments.js"></script>
+<script>
+// Íconos del tipo (x-icon name=…): trazos simples de 24×24; el resto cae en un círculo.
+const ICONS = {
+  Check: 'M5 12l5 5 9-10', CheckCircle: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M8 12l3 3 5-6',
+  Star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z',
+  Users: 'M9 11a4 4 0 1 0 0-8a4 4 0 1 0 0 8M2 21c0-4 3-6 7-6s7 2 7 6M17 11a3 3 0 1 0 0-6M18 15c2.5.5 4 2.5 4 6',
+  Play: 'M7 4l13 8-13 8z', Clock: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v5l3 2',
+  Home: 'M3 11l9-8 9 8M5 10v10h14V10', Chat: 'M4 5h16v11H9l-5 4z', Lightning: 'M13 2L4 14h7l-1 8 9-12h-7z',
+  Search: 'M10 3a7 7 0 1 0 0 14a7 7 0 1 0 0-14M15 15l6 6', Globe: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18',
+  Lightbulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3',
+  Lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4', Warning: 'M12 3l10 18H2zM12 10v5M12 18v.5',
+  ThumbsUp: 'M7 10v11H3V10zM7 10l4-7c2 0 3 1 3 3v3h6l-2 12H7', Activity: 'M3 12h4l3-8 4 16 3-8h4',
+  Chart: 'M4 20V10M10 20V4M16 20v-7M2 20h20', Key: 'M8 11a4 4 0 1 0 0 8a4 4 0 1 0 0-8M11 13l9-9M17 7l3 3',
+  Book: 'M4 4h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H4zM20 4h-6M20 4v13h-6', Cloud: 'M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 19 11a4 4 0 0 1-1 7z',
+  Code: 'M8 7l-5 5 5 5M16 7l5 5-5 5', Database: 'M4 6c0-3 16-3 16 0v12c0 3-16 3-16 0zM4 6c0 3 16 3 16 0M4 12c0 3 16 3 16 0',
+  GraduationCap: 'M2 9l10-5 10 5-10 5zM6 11v5c3 3 9 3 12 0v-5', Link: 'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1',
+  PaperPlane: 'M3 11l18-8-8 18-2-8z', Settings: 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2',
+  Tool: 'M14 6a4 4 0 0 0 5 5l-9 9-3-3 9-9a4 4 0 0 0-2-2', Wrench: 'M14 6a4 4 0 0 0 5 5l-9 9-3-3 9-9a4 4 0 0 0-2-2',
+  Trust: 'M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z', Verified: 'M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6zM8 12l3 3 5-6',
+};
+const deckUrl = 'project/deck.json';
+const $ = id => document.getElementById(id);
+const stage = $('stage'), wrap = $('wrap');
+let deck, slides = [], cur = 0, lc;
+
+function fit() {
+  const s = Math.min(wrap.clientWidth / 1920, wrap.clientHeight / 1080) * 0.96;
+  stage.style.transform = `translate(-50%, -50%) scale(${s})`;
+  lc?.redraw();
+}
+function icon(el) {
+  const d = ICONS[el.getAttribute('name')] || 'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16';
+  el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+}
+function show(i) {
+  if (!slides.length) return;
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  const s = slides[cur];
+  stage.innerHTML = s.html;
+  const sec = stage.querySelector('section');
+  if (sec) sec.hidden = false;
+  stage.querySelectorAll('x-icon').forEach(icon);
+  stage.querySelectorAll('x-embed').forEach(e => {  // la página embebida corre aislada, como en claude.ai
+    const f = document.createElement('iframe');
+    f.setAttribute('sandbox', 'allow-scripts'); f.srcdoc = e.innerHTML; e.replaceChildren(f);
+  });
+  $('n').textContent = `${cur + 1} / ${slides.length}`;
+  $('notes').textContent = sec?.querySelector('aside')?.textContent.trim() || 'Sin notas en esta slide.';
+  history.replaceState(null, '', `#slide-${cur + 1}`);
+  lc?.redraw();
+}
+async function load() {
+  deck = await (await fetch(deckUrl)).json();
+  $('title').textContent = deck.title || 'Presentación';
+  document.title = deck.title || 'Presentación local';
+  for (const f of Object.values(deck.faces || {})) {  // fuentes de Google por la caché local del visor
+    if (!f.href) continue;
+    document.head.append(Object.assign(document.createElement('link'),
+      {rel: 'stylesheet', href: f.href.replace('https://fonts.googleapis.com/', '/_fonts/g/')}));
+  }
+  const ids = deck.order || [];
+  slides = await Promise.all(ids.map(async id => {
+    const r = await fetch(`project/slides/${encodeURIComponent(id)}.html`);
+    return {id, html: r.ok ? await r.text() : `<section style="background:#222;color:#ccc;padding:128px"><p>Falta la slide ${id}</p></section>`};
+  }));
+  const m = location.hash.match(/^#slide-(\d+)$/);
+  show(m ? +m[1] - 1 : 0);
+  const main = document.querySelector('main');
+  lc = LocalComments.mount({
+    art: location.pathname.split('/').filter(Boolean)[0], header: document.querySelector('header'), pickTarget: wrap,
+    anchorAt(e) {  // coordenadas del lienzo de 1920×1080 de la slide visible
+      const r = stage.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return null;
+      return {kind: 'slide', slide: slides[cur].id, x: Math.round((e.clientX - r.left) / r.width * 1920),
+              y: Math.round((e.clientY - r.top) / r.height * 1080)};
+    },
+    pinFor(a) {
+      if (a.slide !== slides[cur]?.id) return null;
+      const r = stage.getBoundingClientRect(), m = main.getBoundingClientRect();
+      return {layer: $('pins'), x: r.left - m.left + a.x / 1920 * r.width, y: r.top - m.top + a.y / 1080 * r.height};
+    },
+    focus: a => show(slides.findIndex(s => s.id === a.slide)),
+    label: a => `la slide ${slides.findIndex(s => s.id === a.slide) + 1}`,
+  });
+}
+$('prev').onclick = () => show(cur - 1);
+$('next').onclick = () => show(cur + 1);
+$('nt').onclick = () => { const n = $('notes'); n.hidden = !n.hidden; $('nt').setAttribute('aria-pressed', String(!n.hidden)); };
+addEventListener('keydown', e => {
+  if (e.target.closest?.('input,textarea,select,button,[contenteditable]') || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') show(cur + 1);
+  if (e.key === 'ArrowLeft' || e.key === 'PageUp') show(cur - 1);
+});
+addEventListener('resize', fit);
+fit();
+load().catch(e => { $('title').textContent = 'No se pudo abrir la presentación: ' + e.message; });
+</script>
+</body>
+</html>

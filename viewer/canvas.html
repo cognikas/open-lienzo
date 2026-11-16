@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lienzo</title>
+<style>
+:root{--bg:#e9e9e6;--bar:#fbfbfa;--fg:#1c1c1a;--mut:#6b6b66;--line:#d6d6d0;--acc:#2f5fd0}
+@media (prefers-color-scheme:dark){:root{--bg:#121211;--bar:#1c1c1b;--fg:#ececea;--mut:#9a9a94;--line:#2f2f2c;--acc:#8fb0ff}}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,sans-serif}
+header{position:fixed;inset:0 0 auto 0;height:48px;display:flex;align-items:center;gap:12px;padding:0 12px;background:var(--bar);border-bottom:1px solid var(--line);z-index:10}
+header a{color:var(--acc);text-decoration:none}
+header h1{font-size:15px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header button,header select{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:6px;padding:4px 10px;min-height:32px}
+#vp{position:fixed;inset:48px 0 0 0;cursor:default;touch-action:none}#vp.hand{cursor:grab}#vp.drag{cursor:grabbing}
+#world{position:absolute;left:0;top:0;transform-origin:0 0}
+.board{position:absolute}
+.board .name{position:absolute;left:0;bottom:100%;padding-bottom:6px;font-size:13px;color:var(--mut);white-space:nowrap}
+.board .name a{color:inherit}
+.board iframe{width:100%;height:100%;border:0;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.15);display:block}
+#vp.drag iframe,#vp.hand iframe{pointer-events:none}
+#vp.hand .board .name a{cursor:inherit}
+.board.sel iframe{outline:calc(2px * var(--px,1)) solid var(--acc);outline-offset:calc(2px * var(--px,1))}.board.sel .name{color:var(--acc)}
+.note{position:absolute;white-space:pre-wrap}
+.note.title1{font-size:72px;font-weight:700;line-height:1.1}
+.note.sticky{padding:12px;border-radius:4px;background:#fff3b0;color:#1c1c1a;font-size:16px;overflow:auto}
+#zoom{min-width:56px;text-align:center;color:var(--mut)}
+.err{padding:80px 24px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+<a href="/" onclick="if(document.referrer&&new URL(document.referrer).origin===location.origin&&new URL(document.referrer).pathname==='/'){history.back();return false}">← Todos</a>
+<h1 id="title">Cargando…</h1>
+<select id="page" hidden aria-label="Página"></select>
+<button id="out" aria-label="Alejar">−</button><span id="zoom">100%</span><button id="in" aria-label="Acercar">+</button>
+<button id="fit">Ajustar</button>
+</header>
+<div id="vp"><div id="world"></div><div id="pins" class="lc-layer"></div></div>
+<script src="/_viewer/comments.js"></script>
+<script src="/_viewer/canvas-edit.js"></script>
+<script>
+const id = location.pathname.split('/').filter(Boolean)[0];
+const base = `/${id}/project/`;
+const vp = document.getElementById('vp'), world = document.getElementById('world');
+const STICKY = {gray:'#e6e6e1',red:'#ffd6d1',orange:'#ffe2c2',green:'#d6f2d0',teal:'#cdeeed',blue:'#d6e4ff',purple:'#e6dcff',pink:'#ffd9ec'};
+const SIZE = {s:12,m:16,l:22,xl:32,xxl:48};
+let cv, view = {x: 0, y: 0, k: 0.25}, curPage, lc, ed;
+
+function apply() {
+  world.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`;
+  world.style.setProperty('--px', 1 / view.k);  // el contorno de selección mide 2 px en pantalla con cualquier zoom
+  document.getElementById('zoom').textContent = Math.round(view.k * 100) + '%';
+  lc?.redraw(); ed?.redraw();
+}
+function zoomAt(f, cx, cy) {
+  const k = Math.min(4, Math.max(0.02, view.k * f));
+  view.x = cx - (cx - view.x) * (k / view.k); view.y = cy - (cy - view.y) * (k / view.k); view.k = k; apply();
+}
+function fit() {
+  const items = [...world.children];
+  if (!items.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const el of items) {
+    const x = +el.dataset.x, y = +el.dataset.y, w = +el.dataset.w, h = +el.dataset.h;
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y - 40); x1 = Math.max(x1, x + w); y1 = Math.max(y1, y + h);
+  }
+  const W = vp.clientWidth, H = vp.clientHeight, pad = 40;
+  view.k = Math.min((W - pad * 2) / (x1 - x0), (H - pad * 2) / (y1 - y0), 1);
+  view.x = pad - x0 * view.k + ((W - pad * 2) - (x1 - x0) * view.k) / 2; view.y = pad - y0 * view.k; apply();
+}
+function place(el, x, y, w, h) {
+  Object.assign(el.dataset, {x, y, w: w || 0, h: h || 0});
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+  if (w) el.style.width = w + 'px'; if (h) el.style.height = h + 'px';
+}
+function render(pageId) {
+  curPage = pageId;
+  world.replaceChildren();
+  const first = cv.pages?.[0]?.id;
+  const onPage = o => !cv.pages?.length || (o.page || first) === pageId;
+  const order = cv.order?.length ? cv.order : Object.keys(cv.boards || {});
+  for (const path of order) {
+    const b = cv.boards[path];
+    if (!b || !onPage(b)) continue;
+    const el = document.createElement('div'); el.className = 'board';
+    const name = document.createElement('div'); name.className = 'name';
+    const a = document.createElement('a'); a.href = base + path; a.target = '_blank';
+    a.textContent = b.title || path.replace(/\.dc\.html$/, ''); name.append(a);
+    const fr = document.createElement('iframe'); fr.src = base + path; fr.title = a.textContent; fr.loading = 'lazy';
+    fr.addEventListener('load', () => { try { hookBoard(fr, el, path); } catch {} });
+    el.append(name, fr); place(el, b.x, b.y, b.w, b.h); world.append(el);
+  }
+  for (const n of Object.values(cv.notes || {})) {
+    if (!onPage(n) || !n.text || (n.kind && n.kind !== 'title1')) continue;
+    const el = document.createElement('div');
+    el.className = 'note ' + (n.kind === 'title1' ? 'title1' : 'sticky'); el.textContent = n.text;
+    if (n.kind !== 'title1') { el.style.background = STICKY[n.fill] || ''; el.style.fontSize = (SIZE[n.size] || n.size || 16) + 'px'; }
+    if (n.maxW) el.style.maxWidth = n.maxW + 'px'; if (n.bold) el.style.fontWeight = 700; if (n.italic) el.style.fontStyle = 'italic';
+    place(el, n.x, n.y, n.kind === 'title1' ? 0 : (n.w || 240), n.kind === 'title1' ? 0 : (n.h || 0)); world.append(el);
+  }
+  fit();
+}
+
+fetch(base + 'canvas.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(c => {
+  cv = c; document.title = document.getElementById('title').textContent = c.title || id;
+  const sel = document.getElementById('page');
+  if (c.pages?.length > 1) {
+    sel.hidden = false;
+    for (const p of c.pages) sel.append(new Option(p.name, p.id));
+    if (c.launch?.page) sel.value = c.launch.page;
+    sel.onchange = () => render(sel.value);
+  }
+  const boardTitle = path => cv.boards[path]?.title || path.replace(/\.dc\.html$/, '');
+  lc = LocalComments.mount({
+    art: id, header: document.querySelector('header'), pickTarget: vp,
+    anchorAt(e) {  // coordenadas del lienzo, y el board que quedó debajo del clic
+      const r = vp.getBoundingClientRect();
+      const x = Math.round((e.clientX - r.left - view.x) / view.k), y = Math.round((e.clientY - r.top - view.y) / view.k);
+      const board = Object.entries(cv.boards || {}).find(([, b]) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+      const a = {kind: 'canvas', page: curPage || null, board: board?.[0] || null, x, y};
+      // sobre un board, el comentario queda en el elemento que está debajo del clic
+      const fr = board && [...world.querySelectorAll('iframe')].find(f => f.getAttribute('src') === base + board[0]);
+      try {
+        const f = fr.getBoundingClientRect(), k = f.width / fr.offsetWidth;
+        const el = fr.contentDocument.elementFromPoint((e.clientX - f.left) / k, (e.clientY - f.top) / k)?.closest('[data-dc-tpl]');
+        if (el) Object.assign(a, ed.anchorFor(el));
+      } catch {}
+      return a;
+    },
+    pinFor: a => (a.page || null) !== (curPage || null) ? null : {layer: document.getElementById('pins'), x: view.x + a.x * view.k, y: view.y + a.y * view.k},
+    focus(a) {
+      if (a.page && a.page !== curPage) { sel.value = a.page; render(a.page); }
+      view.k = Math.max(view.k, 0.5); view.x = vp.clientWidth / 2 - a.x * view.k; view.y = vp.clientHeight / 2 - a.y * view.k; apply();
+    },
+    label: a => a.el != null ? ed.label(a) : a.board ? boardTitle(a.board) : 'el lienzo',
+  });
+  ed = CanvasEdit.mount({art: id, vp, view, comments: lc, boardTitle, pageOf: () => curPage || null});
+  render(sel.value || c.pages?.[0]?.id);
+}).catch(e => { vp.innerHTML = `<p class="err">No se pudo leer canvas.json (${e.message}).</p>`; });
+
+// como el lienzo de Claude: clic derecho y arrastrar = mano, en cualquier parte (también sobre los boards);
+// clic izquierdo = seleccionar un elemento del board (canvas-edit.js lo edita; con ⌥ el board se usa normal).
+// Espacio o la rueda del medio también arrastran
+let drag = null, moved = false, space = false, selected = null;
+function select(el) { selected?.classList.remove('sel'); selected = el; el?.classList.add('sel'); }
+function startDrag({clientX: x, clientY: y}, fromBoard = false) {  // coordenadas de la ventana del visor
+  drag = {x: x - view.x, y: y - view.y, x0: x, y0: y, fromBoard}; moved = false; vp.classList.add('drag');
+}
+function endDrag() { drag = null; vp.classList.remove('drag'); }
+vp.addEventListener('pointerdown', e => {
+  if (e.button === 0 && !space) {
+    const board = e.target.closest('.board');
+    if (board || e.target.closest('button,.lc-pin')) return board && select(board);
+    select(null); ed?.clear();  // clic en el fondo: deselecciona y arrastra
+  } else if (e.button === 1) e.preventDefault();  // sin autoscroll del navegador
+  startDrag(e); vp.setPointerCapture(e.pointerId);
+});
+addEventListener('pointermove', e => moveDrag(e));
+function moveDrag(e) {
+  if (!drag) return;
+  if (!(e.buttons & 7)) return endDrag();  // se soltó fuera sin que llegara el pointerup
+  if (Math.abs(e.clientX - drag.x0) + Math.abs(e.clientY - drag.y0) > 3) moved = true;
+  view.x = e.clientX - drag.x; view.y = e.clientY - drag.y; apply();
+}
+for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, endDrag);
+vp.addEventListener('lostpointercapture', () => { if (drag && !drag.fromBoard) endDrag(); });
+addEventListener('blur', () => { endDrag(); space = false; vp.classList.remove('hand'); });
+// un arrastre no es un clic: ni abre el link del board ni deja un comentario
+vp.addEventListener('click', e => { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
+vp.addEventListener('contextmenu', e => e.preventDefault());  // el clic derecho es la mano
+addEventListener('keydown', e => ed?.key(e));
+function onKey(e) {
+  if (e.code !== 'Space' || e.target.closest?.('input,textarea,select,[contenteditable]')) return;
+  e.preventDefault(); space = e.type === 'keydown'; vp.classList.toggle('hand', space);
+}
+addEventListener('keydown', onKey); addEventListener('keyup', onKey);
+// dentro de un board (mismo origen): clic derecho arrastra el lienzo, clic izquierdo lo selecciona
+function hookBoard(fr, el, path) {
+  const w = fr.contentWindow;
+  ed?.hook(fr, path);
+  w.addEventListener('keydown', onKey); w.addEventListener('keyup', onKey);
+  w.addEventListener('contextmenu', e => e.preventDefault());
+  // el board está escalado por el zoom: sus coordenadas pasan a las de la ventana del visor
+  const out = e => { const r = fr.getBoundingClientRect(), k = r.width / fr.offsetWidth;
+    return {clientX: r.left + e.clientX * k, clientY: r.top + e.clientY * k, buttons: e.buttons}; };
+  w.addEventListener('pointerdown', e => {
+    if (e.button === 0 && !space) { select(el); ed?.pick(path, e.target, e.altKey); return; }
+    e.preventDefault(); e.stopPropagation(); startDrag(out(e), true);
+  }, true);
+  // Chrome sigue mandando el gesto al board donde empezó: se reenvía al visor
+  w.addEventListener('pointermove', e => { if (drag) { e.stopPropagation(); moveDrag(out(e)); } }, true);
+  for (const ev of ['pointerup', 'pointercancel']) w.addEventListener(ev, endDrag);
+}
+vp.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = vp.getBoundingClientRect();
+  if (e.ctrlKey || e.metaKey) zoomAt(Math.exp(-e.deltaY * 0.01), e.clientX - r.left, e.clientY - r.top);
+  else { view.x -= e.deltaX; view.y -= e.deltaY; apply(); }
+}, {passive: false});
+document.getElementById('in').onclick = () => zoomAt(1.25, vp.clientWidth / 2, vp.clientHeight / 2);
+document.getElementById('out').onclick = () => zoomAt(0.8, vp.clientWidth / 2, vp.clientHeight / 2);
+document.getElementById('fit').onclick = fit;
+addEventListener('resize', fit);
+</script>
+</body>
+</html>

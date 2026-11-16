@@ -1,0 +1,4 @@
+__pycache__/
+.DS_Store
+# cuentas reales de cada usuario (emails): la plantilla es sync/accounts.example.json
+sync/accounts.json

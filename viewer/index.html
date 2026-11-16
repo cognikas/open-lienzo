@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Artifacts locales</title>
+<style>
+/* Un catálogo de trabajo: barra de búsqueda arriba, filtros como chips con conteo, lista densa agrupada por fecha. */
+:root{
+  --bg:#f5f6f4;--panel:#ffffff;--fg:#1b1d1c;--mut:#646a66;--faint:#9aa09c;--line:#e1e4e1;--hover:#eef1ee;
+  --acc:#2f5bd3;--acc-soft:#e3eafb;--sel:#dfe7fb;--warn:#a15c00;
+  --e-0:#e4ecfb;--e-0-fg:#2a4fb0;--e-1:#e3f3ea;--e-1-fg:#21704a;
+  --e-2:#fbe9e7;--e-2-fg:#a8392b;--e-3:#fdeedd;--e-3-fg:#9a5410;
+  --e-4:#efe7fb;--e-4-fg:#6440a8;--e-5:#fbe6f1;--e-5-fg:#a12d6b;
+  --e-x:#eceeed;--e-x-fg:#4b524e;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121413;--panel:#191c1a;--fg:#e9ecea;--mut:#9ea6a1;--faint:#6d746f;--line:#2a2e2b;--hover:#202421;
+  --acc:#8fb0ff;--acc-soft:#1f2a45;--sel:#23304f;--warn:#f0b35a;
+  --e-0:#1e2a45;--e-0-fg:#a9c1ff;--e-1:#18301f;--e-1-fg:#8fd9ae;
+  --e-2:#3a1f1b;--e-2-fg:#f2a497;--e-3:#382814;--e-3-fg:#f0bd7f;
+  --e-4:#2a2140;--e-4-fg:#c8b3f5;--e-5:#3a1d2c;--e-5-fg:#f2a3cb;
+  --e-x:#262a28;--e-x-fg:#c3c9c5;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--sans);overflow-x:hidden}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.bar,.filters,main{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.bar{display:flex;align-items:center;gap:16px;padding-block:14px 10px;flex-wrap:wrap}
+.bar h1{font-size:18px;margin:0;letter-spacing:-.01em;white-space:nowrap}
+.bar h1 span{color:var(--mut);font-weight:400;font-variant-numeric:tabular-nums}
+.search{flex:1 1 260px;min-width:0;position:relative}
+.search input{width:100%;font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 36px 8px 12px}
+.search input:focus{outline:2px solid var(--acc);outline-offset:-1px}
+.search kbd{position:absolute;right:8px;top:50%;transform:translateY(-50%)}
+kbd{font:11px var(--mono);color:var(--mut);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 5px;background:var(--panel)}
+.filters{display:flex;flex-wrap:wrap;gap:8px 20px;padding-block:0 12px}
+.group{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.group>b{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-right:2px}
+.chip{font:inherit;font-size:13px;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:3px 10px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.chip:hover{background:var(--hover)}
+.chip[aria-pressed=true]{background:var(--acc-soft);border-color:var(--acc);color:var(--acc)}
+.chip .n{color:var(--faint);font-variant-numeric:tabular-nums;font-size:12px}
+.chip[aria-pressed=true] .n{color:inherit}
+.chip:disabled{opacity:.45;cursor:default}
+.chip:focus-visible,.row:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+select.chip{appearance:none;padding-right:24px;background-image:linear-gradient(45deg,transparent 50%,var(--mut) 50%),linear-gradient(135deg,var(--mut) 50%,transparent 50%);background-position:calc(100% - 13px) 55%,calc(100% - 9px) 55%;background-size:4px 4px;background-repeat:no-repeat}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;mask-image:linear-gradient(90deg,#000 calc(100% - 40px),transparent);padding-right:40px;padding-block:0;margin-bottom:10px;border-bottom:1px solid var(--line)}
+.tab{font:inherit;font-size:13px;color:var(--mut);background:none;border:0;border-bottom:2px solid transparent;padding:8px 10px 7px;cursor:pointer;white-space:nowrap;display:inline-flex;gap:6px;align-items:baseline}
+.tabs::-webkit-scrollbar{display:none}
+.tab:hover{color:var(--fg)}
+.tab[aria-selected=true]{color:var(--fg);border-bottom-color:var(--acc);font-weight:600}
+.tab .n{color:var(--faint);font-size:11px;font-weight:400;font-variant-numeric:tabular-nums}
+.tab:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+.app{color:var(--mut)}
+main{padding-block:8px 48px}
+h2.when{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin:20px 0 6px;display:flex;gap:8px}
+h2.when span{font-weight:400;font-variant-numeric:tabular-nums}
+.list{list-style:none;margin:0;padding:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.row,.cols{display:grid;grid-template-columns:28px minmax(0,1fr) auto auto 140px;align-items:center;gap:12px;padding:9px 14px;border-top:1px solid var(--line);color:inherit;text-decoration:none}
+.list li:first-child .row{border-top:0}
+.row:hover{background:var(--hover)}
+.row.sel{background:var(--sel)}
+.ico{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;background:var(--hover);color:var(--mut)}
+.ico svg{width:16px;height:16px}
+.t{min-width:0}
+.t .name{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t .sub{display:flex;gap:8px;align-items:center;color:var(--faint);font-size:12px;margin-top:1px}
+.ver{font:11px var(--mono);color:var(--mut);background:var(--hover);border-radius:4px;padding:0 5px}
+.ver.old{color:var(--faint)}
+.ver.tie{color:var(--warn)}
+.ent{font-size:12px;border-radius:99px;padding:2px 9px;white-space:nowrap;background:var(--e-x);color:var(--e-x-fg)}
+.marks{display:flex;gap:6px;color:var(--mut);font-size:12px;justify-content:flex-end;min-width:56px}
+.marks span{display:inline-flex;align-items:center;gap:3px}
+.marks svg{width:13px;height:13px}
+.date{color:var(--mut);font-size:12px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.date .mod{color:var(--fg)}.date .mod.local{color:var(--acc);font-weight:600}
+.cols{padding:0 14px 6px;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em}.cols .date{color:inherit;font-size:11px}
+.empty{padding:48px 16px;text-align:center;color:var(--mut)}
+.empty button{margin-top:8px}
+.hint{color:var(--faint);font-size:12px;margin-top:16px;display:flex;gap:14px;flex-wrap:wrap}
+@media (max-width:640px){
+  .row{grid-template-columns:28px minmax(0,1fr) auto;row-gap:4px}
+  .row .ent{grid-column:2;justify-self:start}
+  .row .marks{grid-column:3;grid-row:2}
+  .row .date{grid-column:3;grid-row:1;grid-template-columns:none;gap:0}
+  .cols{display:none}
+  .hint{display:none}
+  .search{flex-basis:100%}
+  .t .name{white-space:normal}
+  .search kbd{display:none}
+}
+@media (prefers-reduced-motion:no-preference){.row,.chip{transition:background-color .12s}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="bar">
+    <h1>Artifacts <span id="count"></span></h1>
+    <div class="search">
+      <label for="q" hidden>Buscar</label>
+      <input id="q" type="search" placeholder="Buscar por título o id…" autocomplete="off">
+      <kbd>/</kbd>
+    </div>
+  </div>
+  <div class="filters"><div class="tabs" id="tabs" role="tablist" aria-label="Apps"></div></div>
+  <div class="filters" id="filters"></div>
+</div>
+<main>
+  <div id="out"></div>
+  <p class="hint"><span><kbd>/</kbd> buscar</span><span><kbd>↑</kbd> <kbd>↓</kbd> moverse</span><span><kbd>Enter</kbd> abrir</span><span><kbd>Esc</kbd> limpiar</span><span>Copia local, sin conexión a claude.ai</span></p>
+</main>
+<script type="application/json" id="data">{{DATA}}</script>
+<script>
+const ALL = JSON.parse(document.getElementById('data').textContent);
+const ICON = {
+  'Página': '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+  'Design': '<rect x="3" y="3" width="8" height="10" rx="1"/><rect x="13" y="3" width="8" height="6" rx="1"/><rect x="13" y="11" width="8" height="10" rx="1"/><rect x="3" y="15" width="8" height="6" rx="1"/>',
+  'Slides': '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M12 16v4M8 20h8"/>',
+};
+const DB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>';
+const CHAT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H9l-5 4z"/></svg>';
+const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">${d}</svg>`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
+
+// Estado: en el hash, para que un filtro se pueda guardar o compartir y sobreviva a volver atrás.
+const DIMS = [['account', 'Cuenta'], ['entity', 'Entidad'], ['kind', 'Tipo']];
+// color estable por entidad sin listar entidades en el código: hash del nombre -> uno de 6 tonos; '?' y vacío, gris
+const hue = e => { if (!e || e === '?') return 'x'; let h = 0; for (const c of e) h = (h * 31 + c.codePointAt(0)) >>> 0; return h % 6; };
+const st = {q: '', app: '', account: '', entity: '', kind: '', latest: true, comments: false, sort: 'date'};
+function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  for (const k of ['q', 'app', 'account', 'entity', 'kind', 'sort']) if (h.has(k)) st[k] = h.get(k);
+  if (h.has('all')) st.latest = false;
+  if (h.has('comments')) st.comments = true;
+}
+function writeHash() {
+  const h = new URLSearchParams();
+  for (const k of ['q', 'app', 'account', 'entity', 'kind']) if (st[k]) h.set(k, st[k]);
+  if (st.sort !== 'date') h.set('sort', st.sort);
+  if (!st.latest) h.set('all', '1');
+  if (st.comments) h.set('comments', '1');
+  history.replaceState(null, '', h.toString() ? '#' + h : location.pathname);
+}
+
+const match = (r, skip) => {
+  const q = st.q.trim().toLowerCase();
+  if (q && !r.title.toLowerCase().includes(q) && !r.app.toLowerCase().includes(q) && !r.id.toLowerCase().startsWith(q)) return false;
+  if (skip !== 'app' && st.app && r.app !== st.app) return false;
+  for (const [k] of DIMS) if (k !== skip && st[k] && r[k] !== st[k]) return false;
+  if (st.latest && !r.latest) return false;
+  if (st.comments && !r.comments) return false;
+  return true;
+};
+
+function renderTabs() {  // una pestaña por app; el conteo respeta búsqueda y chips
+  const t = document.getElementById('tabs');
+  const counts = {};
+  const pool = ALL.filter(r => match(r, 'app'));
+  pool.forEach(r => counts[r.app] = (counts[r.app] || 0) + 1);
+  const apps = [...new Set(ALL.map(r => r.app))]
+    .sort((a, b) => (counts[b] || 0) - (counts[a] || 0) || a.localeCompare(b))
+    .filter(a => counts[a] || a === st.app);
+  t.replaceChildren();
+  for (const [value, label, n] of [['', 'Todas', pool.length], ...apps.map(a => [a, a, counts[a] || 0])]) {
+    const b = Object.assign(document.createElement('button'), {className: 'tab', type: 'button', role: 'tab'});
+    b.setAttribute('aria-selected', String(st.app === value));
+    b.innerHTML = `${esc(label)} <span class="n">${n}</span>`;
+    b.onclick = () => { st.app = value; update(); };
+    t.append(b);
+  }
+  t.querySelector('[aria-selected=true]')?.scrollIntoView({block: 'nearest', inline: 'nearest'});
+}
+
+function renderFilters() {
+  const f = document.getElementById('filters');
+  f.replaceChildren();
+  for (const [k, label] of DIMS) {  // cada conteo respeta los otros filtros, así nunca lleva a una lista vacía
+    const g = Object.assign(document.createElement('div'), {className: 'group', role: 'group'});
+    g.setAttribute('aria-label', label);
+    g.innerHTML = `<b>${label}</b>`;
+    const counts = {};
+    ALL.filter(r => match(r, k)).forEach(r => counts[r[k]] = (counts[r[k]] || 0) + 1);
+    const values = [...new Set(ALL.map(r => r[k]))].sort((a, b) => (counts[b] || 0) - (counts[a] || 0) || a.localeCompare(b));
+    for (const v of values) {
+      if (!counts[v] && st[k] !== v) continue;  // un chip en cero solo agrega ruido
+      const b = Object.assign(document.createElement('button'), {className: 'chip', type: 'button'});
+      b.setAttribute('aria-pressed', String(st[k] === v));
+      b.disabled = !counts[v] && st[k] !== v;
+      b.innerHTML = `${esc(v)} <span class="n">${counts[v] || 0}</span>`;
+      b.onclick = () => { st[k] = st[k] === v ? '' : v; update(); };
+      g.append(b);
+    }
+    f.append(g);
+  }
+  const g = Object.assign(document.createElement('div'), {className: 'group'});
+  const toggle = (key, text, title) => {
+    const b = Object.assign(document.createElement('button'), {className: 'chip', type: 'button', textContent: text, title});
+    b.setAttribute('aria-pressed', String(st[key]));
+    b.onclick = () => { st[key] = !st[key]; update(); };
+    return b;
+  };
+  g.append(toggle('latest', 'Solo vigentes', 'Oculta las versiones viejas de una familia (v1 de v2…)'),
+           toggle('comments', 'Con comentarios', 'Solo los que tienen comentarios locales abiertos'));
+  const sort = Object.assign(document.createElement('select'), {className: 'chip', id: 'sort'});
+  sort.setAttribute('aria-label', 'Orden');
+  sort.innerHTML = '<option value="date">Modificados recientes</option><option value="pub">Publicados en claude.ai</option><option value="title">Título A–Z</option><option value="entity">Por entidad</option>';
+  sort.value = st.sort;
+  sort.onchange = () => { st.sort = sort.value; update(); };
+  g.append(sort);
+  f.append(g);
+}
+
+function bucket(d) {
+  if (!d) return 'Sin fecha';
+  const days = Math.floor((Date.now() - new Date(d + 'T12:00:00')) / 864e5);
+  if (days <= 1) return 'Hoy y ayer';
+  if (days <= 7) return 'Esta semana';
+  if (days <= 31) return 'Este mes';
+  return new Date(d + 'T12:00:00').toLocaleDateString('es', {month: 'long', year: 'numeric'});
+}
+function ago(d) {
+  if (!d) return '';
+  const days = Math.max(0, Math.floor((Date.now() - new Date(d + 'T12:00:00')) / 864e5));
+  return days === 0 ? 'hoy' : days === 1 ? 'ayer' : days < 31 ? `hace ${days} d` : new Date(d + 'T12:00:00').toLocaleDateString('es', {day: 'numeric', month: 'short'});
+}
+function row(r) {
+  const ver = r.ver ? `<span class="ver${r.latest ? '' : ' old'}${r.tie ? ' tie' : ''}" title="${r.tie ? 'Misma fecha que otra versión: el orden no es seguro' : r.latest ? 'Versión vigente de su familia' : 'Hay una versión más nueva'}">${r.ver}${r.tie ? '?' : ''}</span>` : '';
+  const marks = (r.db ? `<span title="Guarda datos (db local)">${DB}</span>` : '') +
+                (r.comments ? `<span title="${r.comments} comentario(s) abierto(s)">${CHAT}${r.comments}</span>` : '');
+  return `<li><a class="row" href="${r.href}" data-id="${r.id}">
+    <span class="ico" title="${r.kind}">${svg(ICON[r.kind])}</span>
+    <span class="t"><span class="name">${esc(r.title)}</span><span class="sub">${ver}${st.app ? '' : `<span class="app">${esc(r.app)}</span>`}<span>${r.kind}</span><span>${esc(r.account)}</span></span></span>
+    <span class="ent" style="background:var(--e-${hue(r.entity)});color:var(--e-${hue(r.entity)}-fg)">${esc(r.entity)}</span>
+    <span class="marks">${marks}</span>
+    <span class="date"><span class="mod${r.modified !== r.updated ? ' local' : ''}" title="Modificado: ${r.modified}${r.modified !== r.updated ? ' (cambio local que claude.ai no tiene)' : ''}">${ago(r.modified)}</span><span title="${r.remote ? 'Versión en claude.ai: ' + r.updated : 'Solo local: alta ' + r.updated}">${r.remote ? ago(r.updated) : '—'}</span></span></a></li>`;
+}
+
+let visible = [], sel = -1;
+function update() {
+  writeHash(); renderTabs(); renderFilters();
+  visible = ALL.filter(r => match(r));
+  const by = {title: (a, b) => a.title.localeCompare(b.title), entity: (a, b) => a.entity.localeCompare(b.entity) || b.modified.localeCompare(a.modified),
+              date: (a, b) => b.modified.localeCompare(a.modified), pub: (a, b) => b.updated.localeCompare(a.updated)}[st.sort] || ((a, b) => b.modified.localeCompare(a.modified));
+  visible.sort(by);
+  document.getElementById('count').textContent = visible.length === ALL.length ? ALL.length : `${visible.length} de ${ALL.length}`;
+  const out = document.getElementById('out');
+  if (!visible.length) {
+    out.innerHTML = '<div class="empty">Ningún artifact coincide con estos filtros.<br><button class="chip" type="button" id="reset">Quitar filtros</button></div>';
+    document.getElementById('reset').onclick = () => { Object.assign(st, {q: '', app: '', account: '', entity: '', kind: '', latest: true, comments: false}); document.getElementById('q').value = ''; update(); };
+    return;
+  }
+  const groups = [];
+  for (const r of visible) {  // por fecha: secciones; por título o entidad: una sola lista (o una por entidad)
+    const key = st.sort === 'date' ? bucket(r.modified) : st.sort === 'pub' ? bucket(r.updated) : st.sort === 'entity' ? r.entity : '';
+    if (!groups.length || groups.at(-1).key !== key) groups.push({key, rows: []});
+    groups.at(-1).rows.push(r);
+  }
+  out.innerHTML = '<div class="cols" aria-hidden="true"><span></span><span></span><span></span><span></span><span class="date"><span>Modificado</span><span>claude.ai</span></span></div>' + groups.map(g => (g.key ? `<h2 class="when">${esc(g.key)} <span>${g.rows.length}</span></h2>` : '') +
+    `<ul class="list">${g.rows.map(row).join('')}</ul>`).join('');
+  sel = -1;
+}
+
+const q = document.getElementById('q');
+q.addEventListener('input', () => { st.q = q.value; update(); });
+addEventListener('keydown', e => {
+  const typing = e.target === q;
+  if (e.key === '/' && !typing) { e.preventDefault(); q.focus(); q.select(); return; }
+  if (e.key === 'Escape') { if (q.value) { q.value = ''; st.q = ''; update(); } q.blur(); return; }
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter') return;
+  const rows = [...document.querySelectorAll('.row')];
+  if (!rows.length) return;
+  if (e.key === 'Enter') { if (sel >= 0) { e.preventDefault(); rows[sel].click(); } else if (typing) { e.preventDefault(); rows[0].click(); } return; }
+  e.preventDefault();
+  sel = Math.max(0, Math.min(rows.length - 1, sel + (e.key === 'ArrowDown' ? 1 : -1)));
+  rows.forEach((r, i) => r.classList.toggle('sel', i === sel));
+  rows[sel].scrollIntoView({block: 'nearest'});
+});
+readHash();
+q.value = st.q;
+update();
+</script>
+</body>
+</html>
