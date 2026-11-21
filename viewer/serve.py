@@ -19,10 +19,12 @@ Sirve una carpeta de artifacts entera (todas las cuentas, un solo índice) o una
                              internet, se baja y se guarda. El HTML y el CSS se reescriben para apuntar acá
   el resto                   archivos estáticos de la raíz; el HTML de las páginas que
                              llaman a claude.use() recibe el shim claude-local.js
+  /_health                   healthcheck: 200 "ok"
 
-Uso:  python3 serve.py --root CARPETA_DE_ARTIFACTS [--port 8765] [--author NOMBRE]
-      python3 serve.py --root CARPETA --prefetch-fonts      llena la caché de fuentes de todos los artifacts y sale
-      (--root y --author también se toman de LIENZO_ROOT y LIENZO_AUTHOR)
+Uso:  python serve.py --root CARPETA_DE_ARTIFACTS [--host 127.0.0.1] [--port 8765] [--author NOMBRE]
+      python serve.py --root CARPETA --prefetch-fonts      llena la caché de fuentes de todos los artifacts y sale
+      (--root, --host y --author también se toman de LIENZO_ROOT, LIENZO_HOST y LIENZO_AUTHOR. La API solo
+      acepta Host 127.0.0.1/localhost aunque escuche en 0.0.0.0: publicar el puerto solo en el loopback)
 """
 import argparse
 import html
@@ -97,14 +99,14 @@ def load_state(root: Path) -> State:
     accounts = [root] if single else sorted(m.parent for m in root.glob("*/manifest.json"))
     s.manifest, s.dirs = [], {}
     for acc in accounts:
-        for e in json.loads((acc / "manifest.json").read_text()):
+        for e in json.loads((acc / "manifest.json").read_text(encoding="utf-8")):
             s.manifest.append({**e, "account": acc.name})
             if (acc / e["id"]).is_dir():
                 s.dirs[e["id"]] = acc / e["id"]
     s.blobs = {p.stem: p for d in s.dirs.values() for p in d.glob("assets/*") if p.is_file()}
     s.live = {
         art_id for art_id, d in s.dirs.items()
-        if any(USES_RUNTIME.search(p.read_text(errors="ignore"))
+        if any(USES_RUNTIME.search(p.read_text(encoding="utf-8", errors="ignore"))
                for ext in ("*.html", "*.js", "*.mjs") for p in d.glob(ext))
     }
     return s
@@ -213,7 +215,7 @@ def prefetch_fonts(state: State):
     for d in state.dirs.values():
         for p in d.rglob("*"):
             if p.suffix in (".html", ".css") and p.is_file() and p.stat().st_size < 20_000_000:
-                for m in re.finditer(r"https://fonts\.googleapis\.com/([^\"'\s)<>]+)", p.read_text(errors="ignore")):
+                for m in re.finditer(r"https://fonts\.googleapis\.com/([^\"'\s)<>]+)", p.read_text(encoding="utf-8", errors="ignore")):
                     found.add(html.unescape(m.group(1)))
     ok = files = 0
     for pq in sorted(found):
@@ -261,8 +263,9 @@ def local_change(d: Path, synced) -> str:
         if not p.is_file() or set(rel.parts) & PAGE_SKIP_DIRS or p.name in PAGE_SKIP_FILES:
             continue
         st = p.stat()
-        seen.add(str(rel))
-        if synced is None or synced.get(str(rel)) != file_sha(p, st):
+        key = rel.as_posix()  # the manifest's keys are POSIX on every OS
+        seen.add(key)
+        if synced is None or synced.get(key) != file_sha(p, st):
             latest = max(latest, st.st_mtime)
     if synced and set(synced) - seen:  # se borró algo: la carpeta registra cuándo
         latest = max(latest, d.stat().st_mtime)
@@ -279,7 +282,7 @@ def index_page(state: State) -> bytes:
         d = state.dirs[art_id]
         kind, href = ("Design", f"/{art_id}/canvas") if is_design(state, art_id) else \
             ("Slides", f"/{art_id}/deck") if is_deck(state, art_id) else ("Página", f"/{art_id}/")
-        comments = [json.loads(c.read_text()) for c in (d / "_comments").glob("*.json")] if (d / "_comments").is_dir() else []
+        comments = [json.loads(c.read_text(encoding="utf-8")) for c in (d / "_comments").glob("*.json")] if (d / "_comments").is_dir() else []
         rows.append({
             "id": art_id, "title": a.get("title", art_id), "href": href, "kind": kind,
             "account": a["account"], "entity": a.get("entity", "?"), "app": a.get("app", "Otros"),
@@ -293,7 +296,7 @@ def index_page(state: State) -> bytes:
         })
     rows.sort(key=lambda r: r["modified"], reverse=True)
     data = json.dumps(rows, ensure_ascii=False).replace("</", "<\\/")  # sin cierre de </script> dentro del JSON
-    return (HERE / "index.html").read_text().replace("{{DATA}}", data).encode()
+    return (HERE / "index.html").read_text(encoding="utf-8").replace("{{DATA}}", data).encode()
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -348,7 +351,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_error(400, "comentario inválido")
         base = st.dirs[art_id] / "_comments"
         if method == "GET":
-            rows = [json.loads(p.read_text()) for p in sorted(base.glob("*.json"))] if base.is_dir() else []
+            rows = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(base.glob("*.json"))] if base.is_dir() else []
             return self.send_json(rows)
         with st.lock:
             if method == "POST":
@@ -372,7 +375,7 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.send_error(400, "text debe ser un texto no vacío")
                 if "resolved" in data and not isinstance(data["resolved"], bool):
                     return self.send_error(400, "resolved debe ser true o false")
-                row = json.loads(f.read_text())
+                row = json.loads(f.read_text(encoding="utf-8"))
                 row.update({k: data[k] for k in ("text", "resolved") if k in data})
                 row["text"] = row["text"][:4000]
             cache_write(base / f"{row['id']}.json", json.dumps(row, ensure_ascii=False, indent=2).encode())
@@ -445,13 +448,13 @@ class Handler(SimpleHTTPRequestHandler):
             rows = []
             if f.is_dir():
                 for p in sorted(f.glob("*.json")):
-                    rows.append({"id": p.stem.replace("@", "~"), "data": json.loads(p.read_text())})
+                    rows.append({"id": p.stem.replace("@", "~"), "data": json.loads(p.read_text(encoding="utf-8"))})
             return self.send_json(rows)
         if kind != "doc":
             return self.send_error(404)
         if method == "GET":
             exists = f.is_file()
-            return self.send_json({"exists": exists, "data": json.loads(f.read_text()) if exists else None})
+            return self.send_json({"exists": exists, "data": json.loads(f.read_text(encoding="utf-8")) if exists else None})
         with st.lock:
             if method == "DELETE":
                 f.unlink(missing_ok=True)
@@ -462,7 +465,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if method == "PATCH":
                     if not f.is_file():
                         return self.send_error(400, "update exige que el documento exista")
-                    data = deep_merge(json.loads(f.read_text()), data)
+                    data = deep_merge(json.loads(f.read_text(encoding="utf-8")), data)
                 cache_write(f, json.dumps(data, ensure_ascii=False, indent=2).encode())  # atómica: un GET nunca ve medio archivo
             st.rev += 1
         self.send_response(204)
@@ -499,6 +502,8 @@ class Handler(SimpleHTTPRequestHandler):
         path = unquote(urlsplit(self.path).path)
         parts = [p for p in path.split("/") if p]
 
+        if parts == ["_health"]:  # healthcheck del contenedor: no toca el estado ni el disco
+            return self.send_bytes(b"ok", "text/plain; charset=utf-8")
         if not parts:
             if manifest_stamp(st.root) != st.stamp:  # servicio permanente: ver lo que otras sesiones bajaron
                 with State.lock:
@@ -554,6 +559,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", type=Path, default=os.environ.get("LIENZO_ROOT"),
                     help="carpeta de artifacts (todas las cuentas) o de una cuenta; o LIENZO_ROOT")
+    ap.add_argument("--host", default=os.environ.get("LIENZO_HOST") or "127.0.0.1",
+                    help="dirección donde escucha; o LIENZO_HOST (por defecto 127.0.0.1; en Docker 0.0.0.0 y el "
+                         "puerto se publica solo en 127.0.0.1 del host)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--author", default=AUTHOR, help="nombre local del usuario; o LIENZO_AUTHOR (por defecto: Local)")
     ap.add_argument("--prefetch-fonts", action="store_true")
@@ -567,7 +575,7 @@ def main():
     Handler.state = load_state(root)
     if args.prefetch_fonts:
         return prefetch_fonts(Handler.state)
-    srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    srv = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"artifacts: {Handler.state.root}\n  {len(Handler.state.manifest)} artifacts, "
           f"{len(Handler.state.blobs)} assets, {len(Handler.state.live)} con db local\n"
           f"  http://127.0.0.1:{args.port}/")

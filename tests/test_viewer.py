@@ -68,17 +68,17 @@ class ViewerTest(unittest.TestCase):
         cls.tmp = Path(tempfile.mkdtemp())
         rt = cls.tmp / "_runtime" / "design-0.0.1" / "artifact-type"
         rt.mkdir(parents=True)
-        (rt / "dc-runtime.js").write_text("/* runtime de prueba */")
+        (rt / "dc-runtime.js").write_text("/* runtime de prueba */", encoding="utf-8")
         acc = cls.tmp / "cuenta"
         (acc / ART).mkdir(parents=True)
-        (acc / ART / "index.html").write_text(PROBE)
+        (acc / ART / "index.html").write_text(PROBE, encoding="utf-8")
         (acc / "Static0000000000000000").mkdir()
         (acc / "Static0000000000000000" / "index.html").write_text(
-            '<html><head><link href="https://fonts.googleapis.com/css2?family=Inter&amp;display=swap" rel="stylesheet"></head></html>')
+            '<html><head><link href="https://fonts.googleapis.com/css2?family=Inter&amp;display=swap" rel="stylesheet"></head></html>', encoding="utf-8")
         (acc / ART / "project").mkdir()
-        (acc / ART / "project" / "B.dc.html").write_text("<x-dc><h2>Hola</h2></x-dc>")
+        (acc / ART / "project" / "B.dc.html").write_text("<x-dc><h2>Hola</h2></x-dc>", encoding="utf-8")
         (acc / "manifest.json").write_text(json.dumps([{"id": ART, "title": "Sonda"},
-                                                        {"id": "Static0000000000000000", "title": "Estática"}]))
+                                                        {"id": "Static0000000000000000", "title": "Estática"}]), encoding="utf-8")
         cls.port = free_port()
         cls.base = f"http://127.0.0.1:{cls.port}"
         cls.proc = subprocess.Popen([sys.executable, str(SERVE), "--root", str(cls.tmp), "--port", str(cls.port)],
@@ -218,15 +218,19 @@ class ViewerTest(unittest.TestCase):
         spec.loader.exec_module(serve)
         d = Path(tempfile.mkdtemp())
         try:
-            (d / "index.html").write_text("hola")
+            (d / "index.html").write_text("hola", encoding="utf-8")
             (d / "_comments").mkdir()
-            (d / "_comments" / "c.json").write_text("{}")  # comentarios y db no cuentan como cambio del artifact
+            (d / "_comments" / "c.json").write_text("{}", encoding="utf-8")  # comentarios y db no cuentan como cambio del artifact
             synced = {"index.html": hashlib.sha256(b"hola").hexdigest()}
             today = datetime.now().strftime("%Y-%m-%d")
             self.assertEqual(serve.local_change(d, synced), "")                       # igual a lo sincronizado
             self.assertEqual(serve.local_change(d, {"index.html": "otro"}), today)     # editado en local
             self.assertEqual(serve.local_change(d, {**synced, "b.html": "x"}), today)  # algo se borró
             self.assertEqual(serve.local_change(d, None), today)                       # solo local
+            (d / "project").mkdir()
+            (d / "project" / "canvas.json").write_text("{}", encoding="utf-8")
+            nested = {**synced, "project/canvas.json": hashlib.sha256(b"{}").hexdigest()}
+            self.assertEqual(serve.local_change(d, nested), "")  # claves POSIX del manifest, también en Windows
         finally:
             shutil.rmtree(d)
 
@@ -237,8 +241,8 @@ class ViewerTest(unittest.TestCase):
         try:
             acc = root / "cuenta"
             (acc / ART / "project").mkdir(parents=True)
-            (acc / ART / "project" / "canvas.json").write_text("{}")
-            (acc / "manifest.json").write_text(json.dumps([{"id": ART, "title": "Sin motor"}]))
+            (acc / ART / "project" / "canvas.json").write_text("{}", encoding="utf-8")
+            (acc / "manifest.json").write_text(json.dumps([{"id": ART, "title": "Sin motor"}]), encoding="utf-8")
             port = free_port()
             proc = subprocess.Popen([sys.executable, str(SERVE), "--root", str(root), "--port", str(port),
                                      "--author", "Ana"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -267,7 +271,7 @@ class ViewerTest(unittest.TestCase):
     @unittest.skipUnless(CHROME.exists(), "Chrome no está instalado")
     def test_shim_in_browser(self):
         dom = subprocess.run([str(CHROME), "--headless=new", "--disable-gpu", "--virtual-time-budget=8000", "--dump-dom",
-                              f"{self.base}/{ART}/index.html"], capture_output=True, text=True, timeout=60).stdout
+                              f"{self.base}/{ART}/index.html"], capture_output=True, text=True, timeout=60, encoding="utf-8").stdout
         out = dom.split('<pre id="out">', 1)[1].split("</pre>", 1)[0]
         self.assertNotIn("ERROR", out)
         parts = dict(p.split(":", 1) for p in out.split("|"))
