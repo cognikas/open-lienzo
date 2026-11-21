@@ -2,8 +2,7 @@
 
 # lienzo — artifacts de claude.ai en local, sincronizados
 
-Cada usuario trabaja sus artifacts **en local y en claude.ai a la vez**. Este repo trae dos piezas, pensadas para
-integrarse en **otterm**:
+Cada usuario trabaja sus artifacts **en local y en claude.ai a la vez**. Este repo trae dos piezas:
 
 | Pieza | Qué hace |
 |---|---|
@@ -136,20 +135,6 @@ de Anthropic, así que este repo no lo redistribuye.** Cada artifact Design lo t
 (`artifact-type/*`): se baja desde la cuenta del usuario con la tool `Artifact` (`read` con `path`) y se copia a
 `<root>/_runtime/design-<versión>/artifact-type/`. Si falta, el servidor arranca igual, avisa en stderr,
 `support.js` responde 404 y los boards se ven en blanco (el lienzo, las notas y los comentarios funcionan).
-
-## Integrarlo en otterm
-
-| Opción | Cómo | A favor | En contra |
-|---|---|---|---|
-| A. Proceso hijo | otterm lanza `serve.py` y abre `http://127.0.0.1:<puerto>/` en una ventana | cero cambios al visor; lo cubren los tests | necesita Python en la máquina |
-| B. Portar la API a Node | el proceso principal sirve `viewer/*` como estáticos e implementa las rutas de la tabla | sin Python; un solo runtime | reimplementar ~12 rutas y sus validaciones (409, `SEG`, `BOARD`, mismo origen) |
-
-La sync encaja tal cual: cada sesión de Claude Code que otterm lanza puede correr `/lienzo-sync` con la cuenta de su
-usuario (la skill y `sync/` no dependen del visor). El front solo depende de esas rutas y del mismo origen: `canvas.html` carga `/_viewer/comments.js` y
-`/_viewer/canvas-edit.js` (globales `LocalComments` y `CanvasEdit`) y monta los boards en iframes del mismo origen,
-que es lo que le deja seleccionar y editar elementos.
-
-Está probado en macOS con Chrome; en Windows todavía no se probó.
 
 ## Archivos
 
