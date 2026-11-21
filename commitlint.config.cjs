@@ -1,2 +1,2 @@
-// Conventional commits: release-please builds the changelog and the next version from them.
+// Conventional commits: they say what each change is, and the release notes are written from them.
 module.exports = { extends: ["@commitlint/config-conventional"] };

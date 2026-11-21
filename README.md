@@ -79,7 +79,7 @@ loopback: `compose.yaml` publishes `127.0.0.1:8765` only. The container drops al
 |---|---|
 | Commit | Husky: compile check + unit tests (`pre-commit`), Conventional Commits via commitlint (`commit-msg`), Trivy fs scan (`pre-push`, if installed). `npm install` once to enable the hooks |
 | CI | Unit tests on Linux, Windows (UTF-8 mode off) and macOS; tests inside the image; Trivy image + repo scans to code scanning, failing on CRITICAL |
-| Release | release-please opens the release PR from Conventional Commits; merging it tags `vX.Y.Z`, pushes a multi-arch image (amd64, arm64) with SBOM and provenance to `ghcr.io/cognikas/open-lienzo`, gates it with Trivy, and attaches the plugin zip and source tarball to the GitHub release |
+| Release | A maintainer sets the version in `package.json` and both plugin manifests, then publishes `gh release create vX.Y.Z --title vX.Y.Z --notes-file <notes>`. The release workflow checks the tag matches those versions, pushes a multi-arch image (amd64, arm64) with SBOM and provenance to `ghcr.io/cognikas/open-lienzo`, gates it with Trivy, and attaches the plugin zip and source tarball |
 
 Every GitHub Action is pinned by commit SHA. Trivy's own actions had their tags hijacked in March 2026
 (GHSA-69fq-xp46-6x23); the pinned `trivy-action` is an immutable release from after that.

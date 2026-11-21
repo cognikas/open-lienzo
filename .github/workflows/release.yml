@@ -1,26 +1,39 @@
 name: release
 
-# A published release → multi-arch image on GHCR (with SBOM and provenance), a Trivy gate on the pushed image,
-# and the plugin zip + source tarball attached to the release. Called by release-please.yml, or runs on a
-# release published by hand.
+# A release published by a maintainer (`gh release create vX.Y.Z`, see README) → a check that the tag matches the
+# versions in package.json and both plugin manifests, a multi-arch image on GHCR (with SBOM and provenance), a
+# Trivy gate on the pushed image, and the plugin zip + source tarball attached to the release.
 
 on:
   release:
     types: [published]
-  workflow_call:
-    inputs:
-      tag:
-        type: string
-        required: true
 
 permissions: {}
 
 env:
-  TAG: ${{ inputs.tag || github.event.release.tag_name }}
+  TAG: ${{ github.event.release.tag_name }}
   IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+      - name: The tag matches package.json and both plugin manifests
+        run: |
+          case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "::error::tag $TAG is not vX.Y.Z"; exit 1 ;; esac
+          for f in package.json plugin/plugin.json plugin/.claude-plugin/plugin.json; do
+            got=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["version"])' "$f")
+            [ "$got" = "${TAG#v}" ] || { echo "::error file=$f::version $got does not match the tag $TAG"; exit 1; }
+          done
+
   image:
+    needs: check
     runs-on: ubuntu-latest
     permissions:
       contents: read
