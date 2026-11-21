@@ -41,7 +41,7 @@ SKIP_FILES = {"SKILL.md", ".DS_Store"}
 
 def load_manifest(root: Path) -> list:
     mf = root / "manifest.json"
-    return json.loads(mf.read_text()) if mf.is_file() else []
+    return json.loads(mf.read_text(encoding="utf-8")) if mf.is_file() else []
 
 
 def live(mf: list) -> list:
@@ -53,7 +53,7 @@ def accounts() -> dict:
     if not ACCOUNTS.is_file():
         sys.exit(f"falta {ACCOUNTS}: copiá sync/accounts.example.json a ese archivo y poné tus cuentas "
                  "(o apuntá LIENZO_ACCOUNTS a otro)")
-    return json.loads(ACCOUNTS.read_text())
+    return json.loads(ACCOUNTS.read_text(encoding="utf-8"))
 
 
 def account_root(account: str) -> Path:
@@ -71,7 +71,7 @@ def check_root(root: Path, account: str):
 
 
 def save_manifest(root: Path, mf: list):
-    (root / "manifest.json").write_text(json.dumps(mf, ensure_ascii=False, indent=2) + "\n")
+    (root / "manifest.json").write_text(json.dumps(mf, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def sha(p: Path) -> str:
@@ -89,13 +89,13 @@ def page_files(root: Path, art_id: str) -> dict:
     for p in sorted(base.rglob("*")):
         rel = p.relative_to(base)
         if p.is_file() and not (set(rel.parts) & SKIP_DIRS) and rel.parts[0] != "assets" and p.name not in SKIP_FILES:
-            out[str(rel)] = sha(p)
+            out[rel.as_posix()] = sha(p)
     return out
 
 
 def db_files(root: Path, art_id: str) -> dict:
     base = root / art_id / "_db"
-    return {str(p.relative_to(base)): sha(p) for p in sorted(base.rglob("*.json"))} if base.is_dir() else {}
+    return {p.relative_to(base).as_posix(): sha(p) for p in sorted(base.rglob("*.json"))} if base.is_dir() else {}
 
 
 def diff(old: dict, new: dict) -> dict:
@@ -200,7 +200,7 @@ def cmd_history(a):
     for h in e.get("history", []) or [{"account": "-", "version": "(ninguna: anterior al registro)", "at": ""}]:
         print(f"  {h['at']:20}  {h['account']:9} {h['version']}")
     log = subprocess.run(["git", "-C", str(root), "log", "--format=%h  %ad  %s", "--date=format:%Y-%m-%d %H:%M",
-                          "--", a.id], capture_output=True, text=True).stdout.strip()
+                          "--", a.id], capture_output=True, text=True, encoding="utf-8").stdout.strip()
     print("\ncontenido en git (git -C <raíz> show <commit>:<id>/<archivo>):\n" + "\n".join("  " + l for l in log.splitlines()))
 
 
@@ -213,7 +213,7 @@ def cmd_find(a):
     repo = account_root(next(iter(accounts()["roots"]))).parent
     entries = {}  # se recorre el repo entero, no solo las cuentas de accounts.json: dedupe también lo hace
     for mf in sorted(repo.glob("*/manifest.json")):
-        for e in json.loads(mf.read_text()):
+        for e in json.loads(mf.read_text(encoding="utf-8")):
             entries[(mf.parent.name, e["id"])] = (mf.parent, e)
 
     def urls_of(acc, e):

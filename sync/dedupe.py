@@ -60,20 +60,21 @@ def fingerprint(d: Path) -> tuple:
     parts, total, n = [], 0, 0
     for p in sorted(d.rglob("*")):
         rel = p.relative_to(d)
+        key = rel.as_posix()  # same fingerprint on every OS
         if not p.is_file() or set(rel.parts) & CONTENT_SKIP_DIRS or p.name in SKIP_FILES:
             continue
         total, n = total + p.stat().st_size, n + 1
         if rel.parts[0] == "assets":
             parts.append(f"asset\0{p.suffix}\0{sha(p)}")  # por contenido: el nombre es un id que cambia al subir
-        elif typed and str(rel) == "index.html":
+        elif typed and key == "index.html":
             continue
         elif p.suffix in TEXT and p.stat().st_size < 20_000_000:
-            text = ASSET_ID.sub(lambda m: assets.get(m.group(0), m.group(0)), p.read_text(errors="ignore"))
+            text = ASSET_ID.sub(lambda m: assets.get(m.group(0), m.group(0)), p.read_text(encoding="utf-8", errors="ignore"))
             if p.name in ("canvas.json", "deck.json"):
                 text = re.sub(r'"createdOnFiles"\s*:\s*\{[^}]*\},?', "", text)
-            parts.append(f"{rel}\0{hashlib.sha256(text.encode()).hexdigest()}")
+            parts.append(f"{key}\0{hashlib.sha256(text.encode()).hexdigest()}")
         else:
-            parts.append(f"{rel}\0{sha(p)}")
+            parts.append(f"{key}\0{sha(p)}")
     if not n:
         return None, 0, 0
     return hashlib.sha256("\n".join(sorted(parts)).encode()).hexdigest(), total, n
@@ -90,7 +91,7 @@ def main():
     manifests, items = {}, []
     for mf in sorted(repo.glob("*/manifest.json")):
         acc = mf.parent.name
-        manifests[acc] = json.loads(mf.read_text())
+        manifests[acc] = json.loads(mf.read_text(encoding="utf-8"))
         for e in manifests[acc]:
             if not e.get("duplicate_of"):
                 fp, b, n = fingerprint(mf.parent / e["id"])
@@ -98,7 +99,7 @@ def main():
 
     # 1. Contenido idéntico → duplicado.
     pf = repo / "latest.json"
-    pinned = set(json.loads(pf.read_text())) if pf.is_file() else set()
+    pinned = set(json.loads(pf.read_text(encoding="utf-8"))) if pf.is_file() else set()
     by_fp = defaultdict(list)
     for it in items:
         if it["fp"]:
@@ -148,7 +149,7 @@ def main():
         folder = repo / acc / e["id"]
         if folder.exists():
             dirty = subprocess.run(["git", "-C", str(repo), "status", "--porcelain", "--", f"{acc}/{e['id']}"],
-                                   capture_output=True, text=True).stdout.strip()
+                                   capture_output=True, text=True, encoding="utf-8").stdout.strip()
             if dirty or any((folder / "_comments").glob("*.json")):
                 # nunca borrar trabajo sin commit ni comentarios locales: se resuelve a mano
                 print(f"saltado {acc}/{e['id']}: " + ("tiene cambios sin commit" if dirty else "tiene comentarios locales"))
@@ -160,7 +161,7 @@ def main():
         if folder.exists():
             subprocess.run(["git", "-C", str(repo), "rm", "-rq", f"{acc}/{e['id']}"], check=True)
     for acc, mf in manifests.items():
-        (repo / acc / "manifest.json").write_text(json.dumps(mf, ensure_ascii=False, indent=2) + "\n")
+        (repo / acc / "manifest.json").write_text(json.dumps(mf, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print("aplicado")
 
 

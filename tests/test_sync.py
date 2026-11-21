@@ -24,11 +24,11 @@ class SyncTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.root = self.tmp / "cuenta"
         (self.root / ID / "_db" / "c").mkdir(parents=True)
-        (self.root / ID / "index.html").write_text("<p>v1</p>")
-        (self.root / ID / "_db" / "c" / "d.json").write_text('{"n": 1}')
+        (self.root / ID / "index.html").write_text("<p>v1</p>", encoding="utf-8")
+        (self.root / ID / "_db" / "c" / "d.json").write_text('{"n": 1}', encoding="utf-8")
         (self.root / ID / "_comments").mkdir()
-        (self.root / ID / "_comments" / "x.json").write_text("{}")
-        (self.root / "manifest.json").write_text(json.dumps([{"id": ID, "url": "u", "title": "T", "updated": "2026-01-01"}]))
+        (self.root / ID / "_comments" / "x.json").write_text("{}", encoding="utf-8")
+        (self.root / "manifest.json").write_text(json.dumps([{"id": ID, "url": "u", "title": "T", "updated": "2026-01-01"}]), encoding="utf-8")
         self._orig = sync.account_root
         sync.account_root = lambda acc: self.root.resolve()
 
@@ -41,7 +41,7 @@ class SyncTest(unittest.TestCase):
                                   "title": None, "entity": None, **kw})
         with redirect_stdout(io.StringIO()):
             sync.cmd_mark(a)
-        return next(e for e in json.loads((self.root / "manifest.json").read_text()) if e["id"] == ID)
+        return next(e for e in json.loads((self.root / "manifest.json").read_text(encoding="utf-8")) if e["id"] == ID)
 
     def test_page_files_skip_db_and_comments(self):
         self.assertEqual(list(sync.page_files(self.root, ID)), ["index.html"])
@@ -56,17 +56,23 @@ class SyncTest(unittest.TestCase):
         first = e["updated"]
         self.assertNotEqual(first, "2026-01-01")             # primera sync: no había hashes, cuenta como cambio
         e["updated"] = "2026-01-02"
-        mf = json.loads((self.root / "manifest.json").read_text())
+        mf = json.loads((self.root / "manifest.json").read_text(encoding="utf-8"))
         mf[0]["updated"] = "2026-01-02"
-        (self.root / "manifest.json").write_text(json.dumps(mf))
+        (self.root / "manifest.json").write_text(json.dumps(mf), encoding="utf-8")
         self.assertEqual(self.mark(version="v1")["updated"], "2026-01-02")  # re-marcar sin cambios no la toca
 
     def test_mark_takes_remote_date(self):
         self.assertEqual(self.mark(version="v1", updated="2026-09-27T10:00:00Z")["updated"], "2026-09-27")  # la de claude.ai, no la del día
-        (self.root / ID / "index.html").write_text("<p>v2</p>")
+        (self.root / ID / "index.html").write_text("<p>v2</p>", encoding="utf-8")
         e = self.mark(version="v2")
         self.assertNotEqual(e["updated"], "2026-01-02")
         self.assertEqual([h["version"] for h in e["history"]], ["v1", "v2"])
+
+    def test_manifest_is_utf8_whatever_the_locale(self):
+        # Windows sin PYTHONUTF8 escribe cp1252 por defecto, que no tiene "⇄": el manifest se abre siempre en UTF-8
+        title = "POS Kozen ⇄ Payment Cryptography — MAC & DUKPT · Árbol"
+        self.assertEqual(self.mark(version="v1", title=title)["title"], title)
+        self.assertIn(title, (self.root / "manifest.json").read_bytes().decode("utf-8"))
 
     def test_new_local_artifact(self):
         a = argparse.Namespace(account="cuenta", title="Árbol de diálogo", entity="demo", app=None)
@@ -74,13 +80,13 @@ class SyncTest(unittest.TestCase):
         with redirect_stdout(out):
             sync.cmd_new(a)
             sync.cmd_new(a)  # mismo título el mismo día: id distinto
-        ids = [e["id"] for e in json.loads((self.root / "manifest.json").read_text()) if e.get("local_only")]
+        ids = [e["id"] for e in json.loads((self.root / "manifest.json").read_text(encoding="utf-8")) if e.get("local_only")]
         self.assertEqual(len(set(ids)), 2)
         self.assertTrue(all(i.startswith("local-") and "arbol-de-dialogo" in i and (self.root / i).is_dir() for i in ids))
 
     def test_files_map_with_explicit_types(self):
-        (self.root / ID / "game.mjs").write_text("export {}")
-        (self.root / ID / "style.css").write_text("")
+        (self.root / ID / "game.mjs").write_text("export {}", encoding="utf-8")
+        (self.root / ID / "style.css").write_text("", encoding="utf-8")
         out = io.StringIO()
         with redirect_stdout(out):
             sync.cmd_files(argparse.Namespace(root=self.root, id=ID))
@@ -107,9 +113,9 @@ class DedupeTest(unittest.TestCase):
         (d / "project").mkdir(parents=True)
         (d / "assets").mkdir()
         (d / "assets" / f"{asset_id}.png").write_bytes(b"PNG-misma-imagen")
-        (d / "index.html").write_text(envelope)
-        (d / "project" / "canvas.json").write_text(json.dumps({"boards": {}, "createdOnFiles": {"v": 1, "at": created}}))
-        (d / "project" / "Main.dc.html").write_text(f'<img src="/_blob/{asset_id}">{board}')
+        (d / "index.html").write_text(envelope, encoding="utf-8")
+        (d / "project" / "canvas.json").write_text(json.dumps({"boards": {}, "createdOnFiles": {"v": 1, "at": created}}), encoding="utf-8")
+        (d / "project" / "Main.dc.html").write_text(f'<img src="/_blob/{asset_id}">{board}', encoding="utf-8")
         return d
 
     def test_republication_is_same_content(self):
@@ -126,18 +132,18 @@ class DedupeTest(unittest.TestCase):
         a = self.design("a", "a" * 32, "x", "t")
         before = dedupe.fingerprint(a)[0]
         (a / "_comments").mkdir()
-        (a / "_comments" / "c.json").write_text("{}")
+        (a / "_comments" / "c.json").write_text("{}", encoding="utf-8")
         self.assertEqual(dedupe.fingerprint(a)[0], before)
         (a / "_db" / "c").mkdir(parents=True)
-        (a / "_db" / "c" / "d.json").write_text("{}")
+        (a / "_db" / "c" / "d.json").write_text("{}", encoding="utf-8")
         self.assertNotEqual(dedupe.fingerprint(a)[0], before)
 
     def test_plain_page_index_counts(self):
         d = self.tmp / "p"
         d.mkdir()
-        (d / "index.html").write_text("uno")
+        (d / "index.html").write_text("uno", encoding="utf-8")
         before = dedupe.fingerprint(d)[0]
-        (d / "index.html").write_text("dos")
+        (d / "index.html").write_text("dos", encoding="utf-8")
         self.assertNotEqual(dedupe.fingerprint(d)[0], before)
 
     def test_nested_and_same_stem_assets(self):

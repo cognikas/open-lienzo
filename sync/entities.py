@@ -41,7 +41,7 @@ def load_rules(path: Path) -> dict:
     [[regex sobre el título en minúsculas y sin tildes, entidad o app]] (la primera que calza gana) · keywords:
     {entidad: regex} · app_folders: [regex con un grupo = carpeta del producto] · app_names: {carpeta: app} ·
     entity_app: {entidad: app por defecto}."""
-    rules = {**EMPTY, **(json.loads(path.read_text()) if path and path.is_file() else {})}
+    rules = {**EMPTY, **(json.loads(path.read_text(encoding="utf-8")) if path and path.is_file() else {})}
     rules["folders"] = [tuple(x) for x in rules["folders"]]
     rules["title_rules"] = [tuple(x) for x in rules["title_rules"]]
     rules["app_titles"] = [tuple(x) for x in rules["app_titles"]]
@@ -73,7 +73,7 @@ def workspace_refs(rules: dict, ws: Path, repo: Path) -> tuple:
         out = subprocess.run(
             ["rg", "-o", "--no-messages", "-g", f"!**/{repo.name}/**", "-g", "!**/node_modules/**",
              "-g", f"!**/{HERE.parent.name}/**", "-g", "*.{md,json,txt,yaml,yml,html}", URL.pattern, "."],
-            cwd=ws, capture_output=True, text=True).stdout
+            cwd=ws, capture_output=True, text=True, encoding="utf-8").stdout
     except FileNotFoundError:
         print("aviso: sin ripgrep (rg) no se buscan referencias en el workspace")
         out = ""
@@ -93,7 +93,7 @@ def workspace_refs(rules: dict, ws: Path, repo: Path) -> tuple:
 def by_content(rules: dict, d: Path):
     if not rules["keywords"]:
         return None
-    text = "".join(fold(p.read_text(errors="ignore")) for p in d.rglob("*.html") if p.stat().st_size < 8_000_000)
+    text = "".join(fold(p.read_text(encoding="utf-8", errors="ignore")) for p in d.rglob("*.html") if p.stat().st_size < 8_000_000)
     hits = Counter({e: len(re.findall(rx, text)) for e, rx in rules["keywords"].items()})
     (top, n), *rest = hits.most_common(2) + [(None, 0)]
     return top if n >= 3 and n >= 2 * rest[0][1] else None
@@ -109,15 +109,15 @@ def main():
     repo = a.repo.resolve()
     rules = load_rules(a.rules or repo / "entities.rules.json")
     manual_f = repo / "entities.json"
-    manual = json.loads(manual_f.read_text()) if manual_f.is_file() else {}
+    manual = json.loads(manual_f.read_text(encoding="utf-8")) if manual_f.is_file() else {}
     refs, app_refs = workspace_refs(rules, a.workspace.resolve(), repo) if a.workspace else ({}, {})
     apps_f = repo / "apps.json"
-    manual_apps = json.loads(apps_f.read_text()) if apps_f.is_file() else {}
+    manual_apps = json.loads(apps_f.read_text(encoding="utf-8")) if apps_f.is_file() else {}
 
     manifests, rows = {}, []
     for mf in sorted(repo.glob("*/manifest.json")):
         acc = mf.parent.name
-        manifests[acc] = json.loads(mf.read_text())
+        manifests[acc] = json.loads(mf.read_text(encoding="utf-8"))
         for e in manifests[acc]:
             title = fold(e.get("title", ""))
             if e["id"] in manual:
@@ -158,7 +158,7 @@ def main():
           ", ".join(f'{e.get("title", "")[:34]} → {e["app"]}' for _, e in rows if e["app_source"] == "entity") or "ninguno")
     if a.apply:
         for acc, mf in manifests.items():
-            (repo / acc / "manifest.json").write_text(json.dumps(mf, ensure_ascii=False, indent=2) + "\n")
+            (repo / acc / "manifest.json").write_text(json.dumps(mf, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("\naplicado")
 
 
