@@ -1,0 +1,15 @@
+# Trivy settings shared by the pre-push hook, `npm run scan` and CI (trivy-action `trivy-config`).
+scan:
+  scanners:
+    - vuln
+    - secret
+    - misconfig
+  skip-dirs:
+    - node_modules
+    - data
+severity:
+  - HIGH
+  - CRITICAL
+vulnerability:
+  ignore-unfixed: true
+ignorefile: .trivyignore

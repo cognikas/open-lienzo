@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# Compile check + unit tests before each commit.
+PY=$(command -v python || command -v python3)
+if [ -z "$PY" ]; then
+  echo "pre-commit: no python on PATH; skipping checks (CI still runs them)"
+  exit 0
+fi
+"$PY" -m compileall -q viewer sync docker tests || exit 1
+"$PY" -X utf8 -m unittest discover -s tests || exit 1

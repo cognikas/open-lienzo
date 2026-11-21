@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# Secrets, misconfig and vulnerable dependencies before anything leaves the machine. CI runs the same scan.
+if command -v trivy >/dev/null 2>&1; then
+  trivy fs --config trivy.yaml --exit-code 1 . || exit 1
+else
+  echo "pre-push: trivy is not installed, skipping the local scan (CI runs it). https://trivy.dev"
+fi

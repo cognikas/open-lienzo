@@ -1,0 +1,20 @@
+{
+  "name": "open-lienzo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dev tooling only (git hooks, commit linting). open-lienzo itself is Python stdlib + static HTML/JS.",
+  "license": "MIT",
+  "repository": "github:cognikas/open-lienzo",
+  "scripts": {
+    "prepare": "husky",
+    "test": "python -X utf8 -m unittest discover -s tests",
+    "docker:build": "docker build --target runner -t open-lienzo:dev .",
+    "docker:test": "docker build --target test .",
+    "scan": "trivy fs --config trivy.yaml ."
+  },
+  "devDependencies": {
+    "@commitlint/cli": "19.8.1",
+    "@commitlint/config-conventional": "19.8.1",
+    "husky": "9.1.7"
+  }
+}
