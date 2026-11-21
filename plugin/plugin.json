@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "open-lienzo",
+  "version": "0.1.0",
+  "description": "Local, git-versioned copy of your claude.ai artifacts and the open-lienzo viewer. In Codex: find, status, viewer and local edits; pushes are left for a Claude Code session."
+}

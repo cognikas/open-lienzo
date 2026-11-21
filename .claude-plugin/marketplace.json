@@ -1,0 +1,14 @@
+{
+  "name": "cognikas",
+  "description": "Cognikas open tools for Claude Code",
+  "owner": {
+    "name": "Cognikas"
+  },
+  "plugins": [
+    {
+      "name": "open-lienzo",
+      "source": "./plugin",
+      "description": "Local, git-versioned copy of your claude.ai artifacts and the open-lienzo viewer"
+    }
+  ]
+}

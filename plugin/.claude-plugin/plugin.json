@@ -1,0 +1,12 @@
+{
+  "name": "open-lienzo",
+  "version": "0.1.0",
+  "description": "Local, git-versioned copy of your claude.ai artifacts and the open-lienzo viewer: find, status, pull, push, db.",
+  "author": {
+    "name": "Cognikas"
+  },
+  "homepage": "https://github.com/cognikas/open-lienzo",
+  "repository": "https://github.com/cognikas/open-lienzo",
+  "license": "MIT",
+  "keywords": ["artifacts", "claude.ai", "sync", "viewer", "design", "slides"]
+}
