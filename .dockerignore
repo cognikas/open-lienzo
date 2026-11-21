@@ -1,0 +1,18 @@
+# Only viewer/, sync/, docker/, hooks/, tests/, LICENSE and README.md go into the image (see Dockerfile).
+.git
+.github
+.husky
+.claude
+.claude-plugin
+.agents
+plugin
+node_modules
+data
+.env
+.env.*
+**/__pycache__
+**/*.pyc
+**/.DS_Store
+sync/accounts.json
+*.tar
+*.zip

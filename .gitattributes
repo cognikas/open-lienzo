@@ -1,0 +1,8 @@
+# Shell hooks and container files must keep LF even on Windows checkouts (core.autocrlf=true).
+.husky/* text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
+compose.yaml text eol=lf
+docker/* text eol=lf
+.github/** text eol=lf
+hooks/* text eol=lf

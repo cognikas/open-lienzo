@@ -1,0 +1,40 @@
+# open-lienzo: the viewer on http://127.0.0.1:${LIENZO_PORT:-8765}, over the artifacts folder in ${LIENZO_DATA}.
+#   docker compose up -d                                   the viewer
+#   docker compose run --rm lienzo sync status --root /data/<account> --account <account>
+#   docker compose run --rm lienzo entities --repo /data   (also: dedupe, fonts, test)
+#
+# No database on purpose: the artifacts stay plain files in a git repo. That is what gives history, diffs,
+# merges, and lets Claude Code / Codex read and edit them directly, and it is where the Artifact tool writes.
+# A search index, if one is ever needed, would be a rebuildable cache (SQLite) next to the files, not a store.
+name: open-lienzo
+
+services:
+  lienzo:
+    image: ghcr.io/cognikas/open-lienzo:${OPEN_LIENZO_TAG:-latest}
+    build:
+      context: .
+      target: runner
+    # The API has no auth: it trusts loopback (Host and Origin must be 127.0.0.1/localhost).
+    # Publish on the host's loopback only; never 0.0.0.0.
+    ports:
+      - "127.0.0.1:${LIENZO_PORT:-8765}:8765"
+    volumes:
+      - ${LIENZO_DATA:-./data}:/data
+    environment:
+      LIENZO_AUTHOR: ${LIENZO_AUTHOR:-Local}
+    # Linux hosts: match the owner of LIENZO_DATA so the viewer can write _db, _comments, boards and fonts.
+    user: "${LIENZO_UID:-10001}:${LIENZO_GID:-10001}"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/_health', timeout=2).status == 200 else 1)"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped

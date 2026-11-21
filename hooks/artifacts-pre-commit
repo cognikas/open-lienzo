@@ -1,0 +1,52 @@
+#!/usr/bin/env sh
+# open-lienzo: pre-commit hook for YOUR ARTIFACTS REPO (not for open-lienzo itself).
+# Artifacts are a full backup of claude.ai work and can carry tokens, keys or passwords. Before each commit this scans
+# exactly what is being committed (the staged content) with Trivy's secret scanner and stops the commit on a finding.
+#
+# Install, from the open-lienzo checkout:
+#   docker compose run --rm lienzo install-hook        (writes /data/.git/hooks/pre-commit)
+#   cp hooks/artifacts-pre-commit <artifacts repo>/.git/hooks/pre-commit
+#
+# Runs a local `trivy` if there is one, otherwise the pinned aquasec/trivy image through Docker.
+# False positive: add its rule id to <artifacts repo>/.trivyignore. Emergency only: git commit --no-verify.
+
+TRIVY_IMAGE="aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb"
+
+top=$(git rev-parse --show-toplevel) || exit 1
+tmp=$(mktemp -d) || exit 1
+trap 'rm -rf "$tmp"' EXIT INT TERM
+
+# The staged content of every added, copied, modified or renamed file, as it will be committed.
+mkdir -p "$tmp/staged"
+git diff --cached --name-only -z --diff-filter=ACMR | git checkout-index --prefix="$tmp/staged/" -z --stdin || exit 1
+[ -n "$(ls -A "$tmp/staged")" ] || exit 0
+
+ignore=""
+if [ -f "$top/.trivyignore" ]; then
+  cp "$top/.trivyignore" "$tmp/.trivyignore"
+  ignore="yes"
+fi
+
+if command -v trivy >/dev/null 2>&1; then
+  trivy fs --scanners secret --exit-code 1 --quiet --table-mode detailed ${ignore:+--ignorefile "$tmp/.trivyignore"} "$tmp/staged"
+  status=$?
+elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  # Git Bash on Windows: hand Docker a C:/... path and stop MSYS from rewriting the -v argument.
+  host=$(cd "$tmp" && { pwd -W 2>/dev/null || pwd; })
+  MSYS_NO_PATHCONV=1 docker run --rm -v "$host:/scan:ro" "$TRIVY_IMAGE" \
+    fs --scanners secret --exit-code 1 --quiet --table-mode detailed ${ignore:+--ignorefile /scan/.trivyignore} /scan/staged
+  status=$?
+  if [ "$status" -eq 125 ]; then  # Docker itself failed (e.g. offline on the first pull of the image)
+    echo "open-lienzo pre-commit: could not run $TRIVY_IMAGE; secret scan skipped."
+    exit 0
+  fi
+else
+  echo "open-lienzo pre-commit: neither trivy nor a running Docker; secret scan skipped. https://trivy.dev"
+  exit 0
+fi
+
+if [ "$status" -ne 0 ]; then
+  echo "open-lienzo pre-commit: commit stopped, see the findings above (paths are relative to the repo)."
+  echo "Remove the secret from the artifact, or add a false positive's rule id to .trivyignore."
+fi
+exit "$status"
