@@ -1,6 +1,6 @@
 {
   "name": "open-lienzo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local, git-versioned copy of your claude.ai artifacts and the open-lienzo viewer: find, status, pull, push, db.",
   "author": {
     "name": "Cognikas"
