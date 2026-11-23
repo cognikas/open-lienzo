@@ -71,6 +71,7 @@ def check_root(root: Path, account: str):
 
 
 def save_manifest(root: Path, mf: list):
+    root.mkdir(parents=True, exist_ok=True)  # cuenta nueva: su carpeta nace con el primer manifest
     (root / "manifest.json").write_text(json.dumps(mf, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -146,7 +147,8 @@ def cmd_status(a):
         if not (empty(pages) and empty(db)) or not url:
             rows.append({"id": e["id"], "title": e.get("title", ""), "pages": pages, "db": db,
                          "url": url, "action": "update" if url else "create"})
-    new = [p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith(("_", ".")) and p.name not in known]
+    new = [p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith(("_", ".")) and p.name not in known] \
+        if root.is_dir() else []  # cuenta recién registrada, sin carpeta todavía: 0 artifacts
     if a.json:
         print(json.dumps({"changed": rows, "untracked": new}, ensure_ascii=False, indent=2))
         return
