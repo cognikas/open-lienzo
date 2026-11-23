@@ -95,6 +95,18 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(m["game.mjs"], {"from": "game.mjs", "contentType": "text/javascript"})
         self.assertEqual(m["style.css"], "style.css")
 
+    def test_new_account_before_its_folder_exists(self):
+        # cuenta recién registrada en accounts.json: su carpeta todavía no existe
+        fresh = self.tmp / "nueva"
+        sync.account_root = lambda acc: fresh.resolve()
+        out = io.StringIO()
+        with redirect_stdout(out):
+            sync.cmd_status(argparse.Namespace(root=fresh, account="nueva", json=False))
+        self.assertTrue(out.getvalue().startswith("0 artifacts"))
+        with redirect_stdout(io.StringIO()):
+            sync.cmd_init(argparse.Namespace(root=fresh, account="nueva"))
+        self.assertEqual(json.loads((fresh / "manifest.json").read_text(encoding="utf-8")), [])
+
     def test_sha_matches_hashlib(self):
         import hashlib
         p = self.root / ID / "index.html"
