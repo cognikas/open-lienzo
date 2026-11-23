@@ -80,7 +80,9 @@ When `status` shows 0 artifacts for a registered account:
 2. For each: `pull` as above and `mark … --url <url> --version <v> --title "<title>" --updated <date>` (without
    `--updated` the index shows the pull date as if it were the claude.ai version). For many, a fresh agent with a short
    brief and batches of ~20.
-3. `entities --repo /data --apply`, then `dedupe --repo /data --apply`. Commit in `$R`, then `fonts`.
+3. Commit the pull in `$R` first: `dedupe` never removes a folder with uncommitted changes, so on an uncommitted pull
+   it discards nothing. Then `entities --repo /data --apply`, then `dedupe --repo /data --apply`, commit again, then
+   `fonts`.
 4. If `$R/.git/hooks/pre-commit` is missing, offer `install-hook` (Docker) or `cp $OL/hooks/artifacts-pre-commit
    $R/.git/hooks/pre-commit`: a Trivy secret scan of every commit in `$R`. If it stops a commit, show the user the
    finding; never bypass it with `--no-verify` on your own.
@@ -115,10 +117,10 @@ Slides at `/<id>/deck`, both with local comments (`<id>/_comments/`, never publi
 servers running: `docker compose down`, or keep the pid and kill it.
 
 ## Catalog upkeep
-After a big pull: `entities --repo /data --apply`, **then** `dedupe --repo /data --apply` (families are grouped by
-entity). `entities` also assigns the **app** (the viewer's tabs). Rules are the user's: `$R/entities.rules.json` (see
-`sync/entities.rules.example.json`). Fixes: entity in `$R/entities.json`, app in `$R/apps.json`, current version in
-`$R/latest.json`.
+After a big pull, once it is committed: `entities --repo /data --apply`, **then** `dedupe --repo /data --apply`
+(families are grouped by entity). `entities` also assigns the **app** (the viewer's tabs). Rules are the user's:
+`$R/entities.rules.json` (see `sync/entities.rules.example.json`). Fixes: entity in `$R/entities.json`, app in
+`$R/apps.json`, current version in `$R/latest.json`.
 
 ## Rules
 - Never publish or delete unless the user asked for it in this turn. `status`, `find` and `pull` are free.
