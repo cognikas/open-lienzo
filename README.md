@@ -52,7 +52,7 @@ python -m unittest discover -s tests
 One skill, packaged for both ([plugin/](plugin/README.md)):
 
 ```sh
-claude plugin marketplace add cognikas/open-lienzo && claude plugin install open-lienzo@cognikas
+claude plugin marketplace add cognikas/open-lienzo && claude plugin install open-lienzo@open-lienzo
 codex plugin marketplace add cognikas/open-lienzo      # then /plugins inside Codex
 ```
 
